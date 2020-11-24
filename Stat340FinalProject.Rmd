@@ -1,0 +1,181 @@
+---
+title: "The Relationship Between Median Income and Voting Habits by County in the 2016 Presidential Election"
+author: "Hasan Khan, Aryan Malik, Joey Robers"
+date: "4/18/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## R Markdown
+
+# Introduction:
+  
+  For this data analysis project, we decided to investigate whether there is a relationship between median household income and the percent of votes by county for Donald Trump in the 2016 Presidential Election, with counties spanning throughout the entire United States of America. We believe that income may affect voter habits since many party platforms have to do with income. Republicans and Democrats have different platforms regarding factors such as income tax and welfare.
+  
+  Throughout this project, we worked with 2016 election data by county to see whether there is a relationship between median household incomes and the percent of votes by county for Donald Trump in the 2016 election. Using county-level data from around the time of the 2016 election, we show that counties with a higher median income are more likely to vote Republican after controlling for the percent of adults with a bachelor’s degree or higher, international migration, death rate, the log of the population, median housing price, and unemployment rate.
+
+
+```{r, message=FALSE, warning= FALSE}
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(viridis)
+library(varhandle)
+library(caret)
+library(psych)
+library(factoextra)
+library(devtools)
+install_github("vqv/ggbiplot")
+library(ggbiplot)
+ housing = read.csv("http://files.zillowstatic.com/research/public/County/County_Zhvi_AllHomes.csv")
+unemploy = read.csv("unemployment2.csv")
+edu = read.csv("education1.csv")
+pop = read.csv("populationestimates.csv")
+election = read.csv("US_County_Level_Presidential_Results_12-16.csv")
+```
+# Methods:  
+  
+  The five total data sets in this project came from three different sources. The election results by county were reported by CNN at the following link: https://www.cnn.com/election/2016/primaries/counties/ia/Dem. This data set reported the FIPS code, the total number of votes in each county in 2016, the percent who voted for Donald Trump in 2016, the percent who voted for Hillary Clinton in 2016, the county name, the two-letter state abbreviation, as well as the election data for 2012. As our response variable, we chose the percent who voted for Donald Trump in 2016. Also, the FIPS code is important, as it is the variable that allows us to join other data sets to this one. The next data set we collected was the explanatory variable we are interested in: income. The dataset we found which was reported by the United States Department of Agriculture includes the county FIPS code, the total number employed, the total workforce, and the unemployment rate for each year from 2007 to 2018. It also reports the median household income for each county in 2018. For our analysis, we kept the unemployment rate in 2016 and the median household income for 2018. Although the income was reported two years after the election, we do not believe that the median household income for each county would change drastically in those two years, so we still think the data is fitting for the model. In addition to the income and unemployment dataset, two other data sets were also reported by the United States Department of Agriculture. The first reports on education level estimates in each county around 2016 and it’s data contains columns showing the percentage of adults with less than a high school diploma, the percent of adults with a high school diploma only, the percent of adults with some college finished, and the percent of adults with a bachelor's degree or higher. Finally, the last dataset from the United States Department of Agriculture contains 149 columns on estimates of variables having to do with the population of each county in years from 2010 to 2017. We focused on the population estimate in 2016, the death rate estimate in 2016, and the international migration rate estimate in 2016. The three datasets reported by the Department of Agriculture can be found through this link: https://www.ers.usda.gov/data-products/county-level-data-sets/download-data/. Our last dataset was reported by Zillow; it shows the median value of single-family homes in each county as of the end of October in 2016. The housing data can be found at this link: http://files.zillowstatic.com/research/public/County/County_Zhvi_AllHomes.csv.
+  
+  Each of these datasets was available in the CSV format and was easily readable in R. The election dataset, education dataset, income, and unemployment dataset, and population dataset all had county FIPS code in the same 4-5 digit format. As a result, these four datasets were easy to combine using a full-join. However, the housing data set was not as straightforward. In each FIPS code, the first one or two digits depend on the state and the last 3 digits depend on the municipality: this number arrangement gives every county in the United States a unique code. Our dataset from Zillow had a 1-2 digit column that describes the state FIPS code and another 1-3 digit column which describes the municipal FIPS code. To join this dataset with the other four, we needed to add zeroes accordingly to each municipal FIPS code so that every entry was three digits long. Following this, we united the state and municipal FIPS code to get the final FIPS code, which matches the others. Also, some of the observations in the median income column of the income and unemployment dataset had `$` and “,” symbols. After being passed to as.numeric, these observations were undergoing a loss in their precision, in other words, the final value was much lesser than the one present originally with the “$” and “,” symbols. To fix this, we had to remove these symbols from the observations and then use the command. 
+  
+  Since we are exploring the relationship between income and voting in the 2016 election, we graphed median income and the percent who voted for Trump in each county on a scatter plot. Because there are not many observations where the percent who voted for Trump are near zero or one, we concluded that a linear model may be viable, despite the response variable being a percentage. His is shown through a histogram that displays the frequency of the percent of voters that voted Republican in the 2016 election. Knowing that our response variable is a percentage and seeing that the bulk of the votes by county are neither by 0 or by 1, we concluded that a linear model would be a viable option to use for our analysis.  
+  
+  After fitting a linear model, we realized that many possible confounders could affect median household income and the percent of people who vote for Trump in each county. The first possible confounder that we thought of was education. We believe that counties that have a more educated population might tend to vote against Trump because more Democrats support student debt forgiveness than Republicans. Also, we suspect that people who are more educated tend to have higher incomes because they have better resumes. We quantified the education in a given county as the percent of adults in that county who have a bachelor’s degree or higher. Another possible confounder is the unemployment rate. We believe that higher unemployment could cause the median household income to go down because there is a greater supply of workers in a given county, so businesses can hire employees at lower wages. Also, these counties would probably vote against Trump since the Democratic Party tends to support certain social safety nets more than Republicans do. One interesting confounding variable which we could find accurate data for is age. In an attempt to at least tackle part of this issue, we looked at the number of deaths in each county per 1000 people. We hoped to capture communities that have an older population with higher death rates. We believe that the older populations tend to hold more conservative values and therefore be more likely to vote for the Republican Party who holds these values. Also, since older communities have more people who are retired, their median income might be lower. An interesting confounder that might be hard to capture is counties with a higher number of people who built wealth through investing who might have a high net worth, but not a high-income level. For example, Sergey Brin, the CEO of Google, earns a $1 per year salary, though he is a billionaire through his equity in Google and other investments. These people might vote Republican for similar reasons than people with high incomes might, but they will not have a high income. We believe that those who built wealth through means other than a normal job would still have an expensive house, so we can capture these anomalies through the median housing price of each county. Another possible confounder is the population. We believe that those who live in bigger cities may be around more diverse populations and that the Democratic Platform targets inequalities between racial groups, which resonates well in diverse populations. Our last confounder has to do with immigration. We believe that counties with a greater number of international immigrants are less likely to support Trump, as he is pushing for a more strict immigration policy. Also, these immigrants likely aim to move toward counties with a higher income, since there is more opportunity there. 
+  
+  All of these confounding variables are important to pursue to get a clearer picture of how income and voting habits in the 2016 election are related. As a result, we fit a linear model similar to the first one but added each confounder as a predictor. We took the logarithm of the population of each county to represent something like population density and took the logarithm of the median housing price in each county; doing this made its relationship with voting habits seem more linear.
+
+```{r}
+housing = housing %>% 
+  select("RegionID", "RegionName", "StateCodeFIPS", "MunicipalCodeFIPS", "State", "X2016.10.31")
+
+
+unemploy = unemploy %>% 
+  select("FIPS", "Unemployment_rate_2016", "Median_Household_Income_2018") 
+
+
+election = election %>% 
+  select("FIPS", "county_name", "state_abbr", "per_dem_2016", "per_gop_2016", "per_point_diff_2016", "total_votes_2016") 
+
+
+edu = edu %>% 
+  select("FIPS.Code", "Percent.of.adults.with.a.bachelor.s.degree.or.higher..2014.18", "Percent.of.adults.with.less.than.a.high.school.diploma..2014.18") %>% 
+  mutate("FIPS" = FIPS.Code)
+
+
+pop = pop %>% 
+  select("FIPS", "POP_ESTIMATE_2016", "R_death_2016", "R_INTERNATIONAL_MIG_2016") %>% 
+  mutate(R_INTERNATIONAL_MIG_2016 = as.numeric(R_INTERNATIONAL_MIG_2016))
+
+
+MunicipalCodeFIPS = as.character(housing$MunicipalCodeFIPS)
+
+for(i in 1:length(MunicipalCodeFIPS)){
+  if(str_length(MunicipalCodeFIPS[i]) == 1){
+    MunicipalCodeFIPS[i] = paste("00", MunicipalCodeFIPS[i], sep = "")
+  }
+  if(str_length(MunicipalCodeFIPS[i]) == 2){
+    MunicipalCodeFIPS[i] = paste("0", MunicipalCodeFIPS[i], sep = "")
+  }
+}
+  
+StateCodeFIPS = as.character(housing$StateCodeFIPS)
+
+housing = housing %>% 
+  select(RegionID, RegionName, State, X2016.10.31) 
+  
+housing = cbind(housing, MunicipalCodeFIPS)
+housing = cbind(housing, StateCodeFIPS)
+
+housing = housing %>% 
+  mutate(FIPS = paste(StateCodeFIPS, MunicipalCodeFIPS, sep = ""))  %>% 
+  mutate(FIPS = as.integer(FIPS))
+
+
+election1 = election %>% 
+  full_join(unemploy, by = "FIPS") %>% 
+  full_join(edu, by = "FIPS") %>% 
+  full_join(housing, by = "FIPS") %>% 
+  full_join(pop, by = "FIPS") %>% 
+  select(-FIPS.Code)
+```
+
+```{r}
+value = unfactor(election1$Median_Household_Income_2018)
+value = sub("$", "", value, fixed = TRUE)
+value = gsub(",", "", value)
+
+Median_Household_Income_2018 = as.numeric(value)
+
+election1 = election1 %>% 
+  select(-Median_Household_Income_2018)
+
+election1 = cbind(election1, Median_Household_Income_2018)
+
+election1 = election1 %>% 
+  mutate(POP_ESTIMATE_2016 = as.numeric(gsub(",","", unfactor(POP_ESTIMATE_2016)))) %>% 
+  filter(county_name != "Alaska")
+```
+``` {r histogram}
+hist(election1$per_gop_2016, main = "Frequency of the Percent of Voters for Trump by County", xlab = "Percent of Votes for Trump")
+
+
+```
+
+# Results :
+
+  Upon performing data analysis using the methods specified above, we first noticed that there is a negative slope when simple linear regression is used with the median household income as the explanatory variable and the percent of votes for Donald Trump in 2016 by county as the response variable. We can interpret the slope of the graph by stating that as the median household income value increases by 1, the predicted percentage of votes for Donald Trump in 2016 will decrease by 0.000002645 (2.645 * 10-6). This is quite surprising because we would typically expect higher household income values to vote Republican. After all, the economic policy of the Republican Party seems to be preferable to those with higher income, as the Republican Party tends to favor lower taxes. Along with the slope, we saw that there is quite a small p-value by the predicted value- 2*10-16, which is small enough to essentially be zero. This p-value is statistically significant as it suggests that there is a relationship between the median household income and the percentage of votes for Donald Trump in the 2016 election by county. Therefore, we would reject the null hypothesis that there is no effect on the percentage of people who vote for the Republican Party with changes in the value of median household income. We also graphed the residual plot of the relationship between median household income and the percent of votes for Donald Trump in the 2016 Election by county. Although there could have been some more scatter amongst the points, the residuals are not forming some clear shape or following a pattern which means that a linear relationship is not out of the question for these two variables.
+  
+
+```{r simple linear regression, message= FALSE, warning = FALSE}
+lm_simplelinreg = lm(per_gop_2016 ~ Median_Household_Income_2018, data = election1)
+summary(lm_simplelinreg)
+
+
+ggplot(data = election1, mapping = aes(x = Median_Household_Income_2018, y = per_gop_2016))+
+  geom_point(alpha = 0.1)+
+  geom_abline(slope = -2.645e-06, intercept = 7.757e-01) +
+  xlab("Median Household Income of 2018") +
+  ylab("Percent of GOP Votes") +
+  ggtitle("Median Household Income vs Percent of Republican Votes", subtitle = "2016 Election, by county") +
+  geom_smooth()
+
+lm_simplelinreg_resi = resid(lm_simplelinreg)
+
+plot(election1$Median_Household_Income_2018[1:3111], lm_simplelinreg_resi, ylab = "Residuals", xlab = "Median Household income", main = "Residual plot")
+abline(0,0)
+```
+
+  Following the simple linear regression, we decided to fit a multiple linear regression. We used the following variables for this: percent of votes for Donald Trump in 2016 as the response variable and median household income, the international migration rate, the death rate, the log of the population estimate of 2016, the percent of adults with a bachelor’s degree, the unemployment rate of 2016, and median housing prices as inputs. Upon looking at the summary table of this multiple linear regression model, we saw that all these variables have statistically significant p-values. This, therefore, rejects the null hypothesis that the variability of these predictors is not related to the percent of people voting for the Republican Party. However, one significant change in this model with respect to the linear regression was that the slope of median household income had changed signs from negative to positive. We, therefore, conclude that the international migration rate, the death rate, the log of the population estimate of 2016, the percent of adults with a bachelor’s degree, the unemployment rate of 2016, and the median housing prices are confounding variables. After controlling for these variables, we can tell that counties with a higher median income tended to vote for Trump at a higher rate, which is something that could not have been concluded with a simple linear regression model.
+```{r multiple-linear-reg}
+lm_multiplelinearreg = lm(per_gop_2016 ~ Median_Household_Income_2018 + R_INTERNATIONAL_MIG_2016 + R_death_2016 + log(POP_ESTIMATE_2016) + log(X2016.10.31) + Percent.of.adults.with.a.bachelor.s.degree.or.higher..2014.18 + Unemployment_rate_2016, data = election1)
+summary(lm_multiplelinearreg)
+```
+
+# Presentation Concerns:
+ 	
+ 	
+  Earlier in this project, we had performed a Principal Component Analysis (PCA). We performed a PCA only on the eight numerical columns in the dataset. It showed us that the column median household income nearly has a 48% variance with respect to the other seven numerical columns. However, after the in-class presentation, we learned that by adding eight principal components, the analysis of our principal components had become incredibly inefficient. Moreover, even after reducing our PCA to two columns in the data, we realized that it was not making any significant efforts to bring out the message of our thesis statement in a better way. Due to these reasons, we eventually decided to remove the Principal Component Analysis from this project. 
+  
+  In our simple linear regression model, there may be a slight pattern in the residual plot. Due to time constraints, the only way we knew how to possibly fix this issue is by adding a quadratic term. To visualize the relationship between income and voting habits better, we fit a smoothing line over the linear model. The smoothing line and linear model are close for most of the domain and only deviate in counties where median household income is especially low. Since the smoothing line’s curve is not symmetric around an extremum (but a quadratic is always symmetric around an extremum), we concluded that a simple linear model would be the best fit.
+  
+  Originally, we had performed cross-validation in our simple and multiple linear regression. It should be noted that the only application we could think of for using cross-validation in this context would be to see how accurate the model would predict future elections. If the cross-validation were to be included in the final report, we would need to justify how this model would well predict the 2020 election and elections beyond. After reflection, we concluded that the predicting power of this model in future elections would be limited. Since the Democrat Party will have a different candidate in 2020 and beyond and both the Republican and Democrat Party platforms seemed to have changed since 2016- at the very least the public perception of the parties’ platforms have changed- we believe that our predictors’ relationship with the voting habits among counties will change. Thus, the cross-validation and application of our model to future elections have been omitted.
+  
+# Limitations :
+ Some limitations that we had in this data analysis project are as follows: we used the median household income data of 2018 even though the project was based in 2016. We went off on the assumption that the median household income has not changed drastically within the past 2 years. Another limitation that we had was with the state of Alaska. There was no data on the Alaskan counties, but only that of the state itself. We decided to exclude it and go on with the analysis.
+ 
+# Conclusion :
+  Upon completing this project, we noticed that median household income does have a relationship with the percentage of votes for Donald Trump by county in the 2016 election. When we looked at Figure 1 where we performed simple linear regression based on the median household income and the percent of votes for Donald Trump by county in the 2016 election, we noticed that there was a negative relationship. In other words, as the median housing prices increase the Democratic party becomes more favorable. However, by adding other predictors such as the international migration rate, the death rate of 2016, the log of the population estimate of 2016, the percent of adults with a bachelor’s degree, the unemployment rate of 2016, and the median housing price along with the median household income, the relationship between the median household income and the percent of votes for Donald Trump by county in the 2016 election was positive. This showed that Donald Trump tended to be favored in counties with a higher median income when we consider other predictors in our model.
+
+
+
+
+
+
+

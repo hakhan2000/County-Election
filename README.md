@@ -1,0 +1,1 @@
+Collected and manipulated 2016 election results obtained from CNN, county-wide education level information, and unemployment data from Department of Agriculture to determine whether a relationship existed between median household income and the proportion of votes for Donald Trump.
